@@ -1,0 +1,10 @@
+The assignment consists of creating a program that can verify a given sudoku
+solution using POSIX threads, preferably as fast as possible.
+
+Compile with
+
+    $ make -s
+
+and run with
+
+    ./sudoku_verifier <input file>
