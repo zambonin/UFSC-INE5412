@@ -4,7 +4,8 @@ all: build
 
 build: $(basename $(wildcard *.c))
 
-test:
+test: build
+	@for f in test/*_grid_* ; do echo $$f ; ./sudoku_verifier $$f ; done | less
 
 clean:
 	@rm $(basename $(wildcard *.c))

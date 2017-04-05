@@ -82,8 +82,7 @@ int main(int argc, char *argv[]) {
     check_sqr(grid, i);
   }
 
-  printf("Solution is %sOK!\n", error_count != 0 ? "not " : "");
-  printf("Errors: %d\n", error_count);
+  printf("Erros encontrados: %d.\n", error_count);
 
 	return 0;
 
