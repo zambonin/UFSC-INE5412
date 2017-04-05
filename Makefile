@@ -1,4 +1,4 @@
-CFLAGS = -Wall -Wextra -march=native -pipe -Og
+CFLAGS = -Wall -Wextra -march=native -pipe -Os -s
 
 all: build
 
