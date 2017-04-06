@@ -7,4 +7,4 @@ Compile with
 
 and run with
 
-    ./sudoku_verifier <input file>
+    ./sudoku_verifier <input file> <nthreads>

@@ -16,7 +16,7 @@ static unsigned short grid[SIZE][SIZE];
 static pthread_t *threads;
 static pthread_mutex_t scheduler, function;
 static task tasks[SIZE * 3];
-static int available_tasks = (1 << 27) - 1;
+static int available_tasks = (1 << (SIZE * 3)) - 1;
 
 void load_grid(unsigned short[][SIZE], char*);
 void check_row(short);
@@ -102,7 +102,7 @@ void check_row(short row_index) {
 
   short errors = hamming_comp(repeated);
   if (errors) {
-    printf("Thread %ld: erro na linha %d.\n", THREAD_ID, row_index);
+    printf("Thread %ld: erro na linha %d.\n", THREAD_ID, row_index + 1);
     pthread_mutex_lock(&function);
     error_count += errors;
     pthread_mutex_unlock(&function);
@@ -118,7 +118,7 @@ void check_col(short col_index) {
 
   short errors = hamming_comp(repeated);
   if (errors) {
-    printf("Thread %ld: erro na coluna %d.\n", THREAD_ID, col_index);
+    printf("Thread %ld: erro na coluna %d.\n", THREAD_ID, col_index + 1);
     pthread_mutex_lock(&function);
     error_count += errors;
     pthread_mutex_unlock(&function);
@@ -136,7 +136,7 @@ void check_sqr(short sqr_index) {
 
   short errors = hamming_comp(repeated);
   if (errors) {
-    printf("Thread %ld: erro na regiao %d.\n", THREAD_ID, sqr_index);
+    printf("Thread %ld: erro na regiao %d.\n", THREAD_ID, sqr_index + 1);
     pthread_mutex_lock(&function);
     error_count += errors;
     pthread_mutex_unlock(&function);
@@ -148,9 +148,11 @@ void* choose_task() {
     pthread_mutex_lock(&scheduler);
     if ((available_tasks >> i) & 1) {
       available_tasks &= ~(1 << i);
+      pthread_mutex_unlock(&scheduler);
       tasks[i].check(tasks[i].param);
+    } else {
+      pthread_mutex_unlock(&scheduler);
     }
-    pthread_mutex_unlock(&scheduler);
   }
 
   return NULL;
