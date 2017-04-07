@@ -1,157 +1,129 @@
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/syscall.h>
-#include <unistd.h>
 
-#define SIZE  9
-#define THREAD_ID       syscall(__NR_gettid)
-#define hamming_comp(x)  __builtin_popcount(~x & ((1 << (SIZE + 1)) - 1))
+#define SIZE        9
+#define length(x)   sizeof(x) / sizeof(x[0])
 
-typedef void (*func_ptr_t)(short);
-typedef struct { func_ptr_t check; short param; } task;
+typedef void (*func_ptr_t)(uint8_t);
+typedef struct { func_ptr_t check; uint8_t param; } task;
 
-static short error_count = 0;
-static unsigned short grid[SIZE][SIZE];
+static uint8_t error_count = 0, grid[SIZE][SIZE];
 static pthread_t *threads;
-static pthread_mutex_t scheduler, function;
-static task tasks[SIZE * 3];
-static int available_tasks = (1 << (SIZE * 3)) - 1;
+static pthread_mutex_t buf_mutex, err_mutex;
 
-void load_grid(unsigned short[][SIZE], char*);
-void check_row(short);
-void check_col(short);
-void check_sqr(short);
+void load_grid(uint8_t[][SIZE], char*), print_errors(uint16_t, uint8_t, char*);
+void check_row(uint8_t), check_col(uint8_t), check_sqr(uint8_t);
 void* choose_task();
 
-int main(int argc, char *argv[]) {
+static task tasks[] = { [0 ... SIZE - 1] = { check_row, 0 },
+  [SIZE ... SIZE * 2 - 1] = { check_col, 0 },
+  [SIZE * 2 ... SIZE * 3 - 1] = { check_sqr, 0 }, };
+static uint32_t available_tasks = (1 << length(tasks)) - 1;
+
+int32_t main(int32_t argc, char **argv) {
   if (argc != 3) {
     printf("Usage: %s input_grid nthreads\n", argv[0]);
     exit(1);
   }
 
   load_grid(grid, argv[1]);
+  uint32_t nthreads = atoi(argv[2]);
+  threads = calloc(nthreads, sizeof(pthread_t));
 
-  int nthreads = atoi(argv[2]);
-  threads = calloc((unsigned int) nthreads, sizeof(pthread_t));
-
-  printf("Quebra-cabecas fornecido:\n");
-  for (int i = 0; i < SIZE; ++i) {
-    for (int j = 0; j < SIZE; ++j) {
-      printf("%hu ", grid[i][j]);
-    }
-    printf("\n");
+  for (uint8_t i = 0; i < length(tasks); ++i) {
+    tasks[i].param = i % SIZE;
   }
 
-  for (short i = 0; i < SIZE; ++i) {
-    tasks[i].check = check_row;
-    tasks[i].param = i % 9;
-  }
+  pthread_mutex_init(&buf_mutex, NULL);
+  pthread_mutex_init(&err_mutex, NULL);
 
-  for (short i = SIZE; i < SIZE * 2; ++i) {
-    tasks[i].check = check_col;
-    tasks[i].param = i % 9;
-  }
-
-  for (short i = SIZE * 2; i < SIZE * 3; ++i) {
-    tasks[i].check = check_sqr;
-    tasks[i].param = i % 9;
-  }
-
-  pthread_mutex_init(&scheduler, NULL);
-  pthread_mutex_init(&function, NULL);
-  for (int i = 0; i < nthreads; ++i) {
+  for (uint8_t i = 0; i < nthreads; ++i) {
     pthread_create(&threads[i], NULL, choose_task, NULL);
   }
 
-  for (int i = 0; i < nthreads; ++i) {
+  for (uint8_t i = 0; i < nthreads; ++i) {
     pthread_join(threads[i], NULL);
   }
-  pthread_mutex_destroy(&function);
-  pthread_mutex_destroy(&scheduler);
+
+  pthread_mutex_destroy(&err_mutex);
+  pthread_mutex_destroy(&buf_mutex);
 
   printf("Erros encontrados: %d.\n", error_count);
-
   free(threads);
 
   return EXIT_SUCCESS;
 }
 
-void load_grid(unsigned short grid[][SIZE], char* file) {
+void load_grid(uint8_t grid[][SIZE], char* file) {
   FILE* input = fopen(file, "r");
 
   if (input == NULL) {
     exit(1);
   }
 
+  printf("Quebra-cabecas fornecido:\n");
   for (int i = 0; i < SIZE; ++i) {
     for (int j = 0; j < SIZE; ++j) {
-      fscanf(input, "%hu", &grid[i][j]);
+      fscanf(input, "%hhu", &grid[i][j]);
+      printf("%hhu ", grid[i][j]);
     }
+    printf("\n");
   }
 
   fclose(input);
 }
 
-void check_row(short row_index) {
-  unsigned short repeated = 1;
-
-  for (short i = 0; i < SIZE; ++i) {
-    repeated |= 1 << grid[row_index][i];
+void check_row(uint8_t row_index) {
+  uint16_t repeated = 0;
+  for (uint8_t i = 0; i < length(grid[0]); ++i) {
+    repeated |= 1 << (grid[row_index][i] - 1);
   }
 
-  short errors = hamming_comp(repeated);
-  if (errors) {
-    printf("Thread %ld: erro na linha %d.\n", THREAD_ID, row_index + 1);
-    pthread_mutex_lock(&function);
-    error_count += errors;
-    pthread_mutex_unlock(&function);
-  }
+  print_errors(repeated, row_index, "linha");
 }
 
-void check_col(short col_index) {
-  unsigned short repeated = 1;
-
-  for (short i = 0; i < SIZE; ++i) {
-    repeated |= 1 << grid[i][col_index];
+void check_col(uint8_t col_index) {
+  uint16_t repeated = 0;
+  for (uint8_t i = 0; i < length(grid[0]); ++i) {
+    repeated |= 1 << (grid[i][col_index] - 1);
   }
 
-  short errors = hamming_comp(repeated);
-  if (errors) {
-    printf("Thread %ld: erro na coluna %d.\n", THREAD_ID, col_index + 1);
-    pthread_mutex_lock(&function);
-    error_count += errors;
-    pthread_mutex_unlock(&function);
-  }
+  print_errors(repeated, col_index, "coluna");
 }
 
-void check_sqr(short sqr_index) {
-  short r = sqr_index / 3 * 3, c = sqr_index % 3 * 3, repeated = 1;
-
-  for (short i = r; i < r + 3; ++i) {
-    for (short j = c; j < c + 3; ++j) {
-      repeated |= 1 << grid[i][j];
+void check_sqr(uint8_t sqr_index) {
+  uint8_t r = sqr_index / 3 * 3, c = sqr_index % 3 * 3;
+  uint16_t repeated = 0;
+  for (uint8_t i = r; i < r + 3; ++i) {
+    for (uint8_t j = c; j < c + 3; ++j) {
+      repeated |= 1 << (grid[i][j] - 1);
     }
   }
 
-  short errors = hamming_comp(repeated);
+  print_errors(repeated, sqr_index, "regiao");
+}
+
+void print_errors(uint16_t count, uint8_t index, char* type) {
+  uint16_t errors = __builtin_popcount(~count & ((1 << SIZE) - 1));
   if (errors) {
-    printf("Thread %ld: erro na regiao %d.\n", THREAD_ID, sqr_index + 1);
-    pthread_mutex_lock(&function);
+    printf("Thread %ld: erro na %s %d.\n", pthread_self(), type, index + 1);
+    pthread_mutex_lock(&err_mutex);
     error_count += errors;
-    pthread_mutex_unlock(&function);
+    pthread_mutex_unlock(&err_mutex);
   }
 }
 
 void* choose_task() {
-  for (short i = 0; i < SIZE * 3; ++i) {
-    pthread_mutex_lock(&scheduler);
+  for (uint8_t i = 0; i < length(tasks); ++i) {
+    pthread_mutex_lock(&buf_mutex);
     if ((available_tasks >> i) & 1) {
       available_tasks &= ~(1 << i);
-      pthread_mutex_unlock(&scheduler);
+      pthread_mutex_unlock(&buf_mutex);
       tasks[i].check(tasks[i].param);
     } else {
-      pthread_mutex_unlock(&scheduler);
+      pthread_mutex_unlock(&buf_mutex);
     }
   }
 
