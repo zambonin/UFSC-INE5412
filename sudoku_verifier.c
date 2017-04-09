@@ -4,43 +4,39 @@
 #include <stdlib.h>
 
 #define SIZE        9
-#define length(x)   sizeof(x) / sizeof(x[0])
+#define length(x)   (sizeof(x) / sizeof((x)[0]))
 
-typedef void (*func_ptr_t)(uint8_t);
-typedef struct { func_ptr_t check; uint8_t param; } task;
+void load_grid(uint8_t /*grid*/[][SIZE], char* /*file*/),
+     print_errors(uint16_t /*count*/, uint8_t /*index*/, char* /*type*/),
+     check_row(uint8_t /*row_index*/), check_col(uint8_t /*col_index*/),
+     check_sqr(uint8_t /*sqr_index*/);
+void* choose_task(void* /*len*/);
 
 static uint8_t error_count = 0, grid[SIZE][SIZE];
 static pthread_t *threads;
 static pthread_mutex_t buf_mutex, err_mutex;
 
-void load_grid(uint8_t[][SIZE], char*), print_errors(uint16_t, uint8_t, char*);
-void check_row(uint8_t), check_col(uint8_t), check_sqr(uint8_t);
-void* choose_task();
-
-static task tasks[] = { [0 ... SIZE - 1] = { check_row, 0 },
-  [SIZE ... SIZE * 2 - 1] = { check_col, 0 },
-  [SIZE * 2 ... SIZE * 3 - 1] = { check_sqr, 0 }, };
+typedef void (*func_ptr_t)(uint8_t);
+static const func_ptr_t tasks[] = { [0 ... SIZE - 1] = check_row,
+  [SIZE ... SIZE * 2 - 1] = check_col,
+  [SIZE * 2 ... SIZE * 3 - 1] = check_sqr };
 static uint32_t available_tasks = (1 << length(tasks)) - 1;
 
 int32_t main(int32_t argc, char **argv) {
   if (argc != 3) {
     printf("Usage: %s input_grid nthreads\n", argv[0]);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   load_grid(grid, argv[1]);
-  uint32_t nthreads = atoi(argv[2]);
+  uint64_t nthreads = strtoul(argv[2], NULL, 10);
   threads = calloc(nthreads, sizeof(pthread_t));
-
-  for (uint8_t i = 0; i < length(tasks); ++i) {
-    tasks[i].param = i % SIZE;
-  }
 
   pthread_mutex_init(&buf_mutex, NULL);
   pthread_mutex_init(&err_mutex, NULL);
 
   for (uint8_t i = 0; i < nthreads; ++i) {
-    pthread_create(&threads[i], NULL, choose_task, NULL);
+    pthread_create(&threads[i], NULL, choose_task, (void*) length(tasks));
   }
 
   for (uint8_t i = 0; i < nthreads; ++i) {
@@ -53,21 +49,20 @@ int32_t main(int32_t argc, char **argv) {
   printf("Erros encontrados: %d.\n", error_count);
   free(threads);
 
-  return EXIT_SUCCESS;
+  exit(EXIT_SUCCESS);
 }
 
-void load_grid(uint8_t grid[][SIZE], char* file) {
+void load_grid(uint8_t m[][SIZE], char* file) {
   FILE* input = fopen(file, "r");
-
   if (input == NULL) {
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   printf("Quebra-cabecas fornecido:\n");
   for (int i = 0; i < SIZE; ++i) {
     for (int j = 0; j < SIZE; ++j) {
-      fscanf(input, "%hhu", &grid[i][j]);
-      printf("%hhu ", grid[i][j]);
+      fscanf(input, "%hhu ", &m[i][j]);
+      printf("%hhu ", m[i][j]);
     }
     printf("\n");
   }
@@ -106,22 +101,22 @@ void check_sqr(uint8_t sqr_index) {
 }
 
 void print_errors(uint16_t count, uint8_t index, char* type) {
-  uint16_t errors = __builtin_popcount(~count & ((1 << SIZE) - 1));
+  int32_t errors = __builtin_popcount(~count & ((1 << SIZE) - 1));
   if (errors) {
-    printf("Thread %ld: erro na %s %d.\n", pthread_self(), type, index + 1);
+    printf("Thread %lu: erro na %s %d.\n", pthread_self(), type, index + 1);
     pthread_mutex_lock(&err_mutex);
     error_count += errors;
     pthread_mutex_unlock(&err_mutex);
   }
 }
 
-void* choose_task() {
-  for (uint8_t i = 0; i < length(tasks); ++i) {
+void* choose_task(void* len) {
+  for (uint8_t i = 0; i < (intptr_t) len; ++i) {
     pthread_mutex_lock(&buf_mutex);
     if ((available_tasks >> i) & 1) {
       available_tasks &= ~(1 << i);
       pthread_mutex_unlock(&buf_mutex);
-      tasks[i].check(tasks[i].param);
+      tasks[i](i % SIZE);
     } else {
       pthread_mutex_unlock(&buf_mutex);
     }
