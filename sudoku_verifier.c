@@ -8,17 +8,16 @@
 
 void load_grid(uint8_t /*grid*/[][SIZE], char* /*file*/),
      print_errors(uint16_t /*count*/, uint8_t /*index*/,
-                  uint32_t /*tid*/, char* /*type*/),
-     check_row(uint8_t /*row_index*/, uint32_t /*tid*/),
-     check_col(uint8_t /*col_index*/, uint32_t /*tid*/),
-     check_sqr(uint8_t /*sqr_index*/, uint32_t /*tid*/);
+                  uint16_t /*tid*/, char* /*type*/),
+     check_row(uint8_t /*row_index*/, uint16_t /*tid*/),
+     check_col(uint8_t /*col_index*/, uint16_t /*tid*/),
+     check_sqr(uint8_t /*sqr_index*/, uint16_t /*tid*/);
 void* choose_task(void* /*len*/);
 
 static uint8_t error_count = 0, grid[SIZE][SIZE];
-static pthread_t *threads;
 static pthread_mutex_t buf_mutex, err_mutex;
 
-typedef void (*func_ptr_t)(uint8_t, uint32_t);
+typedef void (*func_ptr_t)(uint8_t, uint16_t);
 static const func_ptr_t tasks[] = { [0 ... SIZE - 1] = check_row,
   [SIZE ... SIZE * 2 - 1] = check_col,
   [SIZE * 2 ... SIZE * 3 - 1] = check_sqr };
@@ -32,7 +31,7 @@ int32_t main(int32_t argc, char **argv) {
 
   load_grid(grid, argv[1]);
   uint16_t nthreads = strtoul(argv[2], NULL, 10);
-  threads = calloc(nthreads, sizeof(pthread_t));
+  pthread_t threads[nthreads];
 
   pthread_mutex_init(&buf_mutex, NULL);
   pthread_mutex_init(&err_mutex, NULL);
@@ -49,8 +48,6 @@ int32_t main(int32_t argc, char **argv) {
   pthread_mutex_destroy(&buf_mutex);
 
   printf("Erros encontrados: %d.\n", error_count);
-  free(threads);
-
   exit(EXIT_SUCCESS);
 }
 
@@ -65,6 +62,7 @@ void load_grid(uint8_t m[][SIZE], char* file) {
     for (int j = 0; j < SIZE; ++j) {
       fscanf(input, "%hhu ", &m[i][j]);
       printf("%hhu ", m[i][j]);
+      m[i][j] -= 1;
     }
     printf("\n");
   }
@@ -72,38 +70,38 @@ void load_grid(uint8_t m[][SIZE], char* file) {
   fclose(input);
 }
 
-void check_row(uint8_t row_index, uint32_t tid) {
+void check_row(uint8_t row_index, uint16_t tid) {
   uint16_t repeated = 0;
   for (uint8_t i = 0; i < length(grid[0]); ++i) {
-    repeated |= 1 << (grid[row_index][i] - 1);
+    repeated |= 1 << grid[row_index][i];
   }
 
   print_errors(repeated, row_index, tid, "linha");
 }
 
-void check_col(uint8_t col_index, uint32_t tid) {
+void check_col(uint8_t col_index, uint16_t tid) {
   uint16_t repeated = 0;
   for (uint8_t i = 0; i < length(grid[0]); ++i) {
-    repeated |= 1 << (grid[i][col_index] - 1);
+    repeated |= 1 << grid[i][col_index];
   }
 
   print_errors(repeated, col_index, tid, "coluna");
 }
 
-void check_sqr(uint8_t sqr_index, uint32_t tid) {
-  uint8_t r = sqr_index / 3 * 3, c = sqr_index % 3 * 3;
+void check_sqr(uint8_t sqr_index, uint16_t tid) {
+  uint8_t r = (sqr_index / 3) * 3, c = (sqr_index % 3) * 3;
   uint16_t repeated = 0;
   for (uint8_t i = r; i < r + 3; ++i) {
     for (uint8_t j = c; j < c + 3; ++j) {
-      repeated |= 1 << (grid[i][j] - 1);
+      repeated |= 1 << grid[i][j];
     }
   }
 
   print_errors(repeated, sqr_index, tid, "regiao");
 }
 
-void print_errors(uint16_t count, uint8_t index, uint32_t tid, char* type) {
-  int32_t errors = __builtin_popcount(~count & ((1 << SIZE) - 1));
+void print_errors(uint16_t count, uint8_t index, uint16_t tid, char* type) {
+  uint8_t errors = __builtin_popcount(~count & ((1 << SIZE) - 1));
   if (errors) {
     printf("Thread %d: erro na %s %d.\n", tid, type, index + 1);
     pthread_mutex_lock(&err_mutex);
