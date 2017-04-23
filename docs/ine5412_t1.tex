@@ -1,0 +1,150 @@
+\documentclass[12pt]{article}
+
+\usepackage[brazil]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper, margin=1.5cm]{geometry}
+\usepackage[colorlinks, urlcolor=blue, citecolor=red]{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+
+\lstdefinelanguage{cc}{
+  language = C,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  morekeywords = {uint8_t, uint16_t, intptr_t, __builtin_popcount, SIZE},
+}
+
+\title{\textbf{Verificador de Sudoku \emph{Multithread}}}
+\author{
+  Gustavo F. Guimarães, Gustavo Zambonin, Marcello Klingelfus\thanks{
+    \texttt{\{gustavo.g,gustavo.zambonin,marcello.klingelfus\}@grad.ufsc.br}
+    \hfill \texttt{\href{https://github.com/zambonin/ufsc-ine5412}{src/}}
+  } \\
+  \small{Sistemas Operacionais I (UFSC -- INE5412)}
+}
+\date{}
+
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+\maketitle
+
+\section{Verificação da repetição para um conjunto de números}
+
+\emph{Funções aludidas}: \texttt{check\_row}, \texttt{check\_col},
+\texttt{check\_sqr}, \texttt{print\_errors} \\
+
+Para evitar a maior complexidade de tempo e espaço obtida a partir de uma
+solução comum para este problema, uma abordagem mais minimalista foi utilizada,
+que não envolve desvios condicionais, a criação de vetores auxiliares ou a
+ordenação do conjunto. É possível perceber que apenas oito bits poderiam ser
+utilizados para carregar o resultado da verificação da lista de números, pois
+no caso do \emph{sudoku} sempre existirá um número em sua posição correta.
+Assim, apenas oito checagens seriam necessárias; entretanto, a prototipação
+desta estratégia mostrou que a abordagem a seguir teria um melhor balanço entre
+legibilidade do código e desempenho alcançado. \\
+
+Sendo assim, o método desenvolvido consiste na alocação de um inteiro
+\emph{unsigned} de 16 bits, onde apenas nove destes são utilizados. A cada
+iteração na região selecionada, um deslocamento à esquerda é feito $n$ vezes,
+onde $n$ é o número presente no vetor na posição referente à iteração. Assim,
+caso uma região não apresente erros, o inteiro alocado terá valor
+$(1 << 9) - 1 = 2^9 - 1 = 511$. Em Python, este método pode ser escrito como
+\verb!reduce(lambda x, y: x | ((1 << y) - 1), range(1, 10))!.
+Note que é possível substituir o iterável \texttt{range} por qualquer lista de
+números.
+
+\begin{figure}[htbp]
+  \lstinputlisting[language=cc, linerange={91-98}]{../sudoku_verifier.c}
+  \caption{Checagem de repetições em uma região quadrada do tabuleiro. Cada
+    uma destas pode ser obtida a partir de um índice $i \in \{0, 8\}$,
+    organizadas da esquerda para a direita, de cima para baixo.}
+\end{figure}
+
+Caso existam repetições, alguns bits não serão ativados, e deste modo, estes
+podem ser contados para descobrir a quantidade de números repetidos naquela
+linha. Isto é feito com uma extensão do compilador GCC (também suportada por
+Clang), chamada de \texttt{\_\_builtin\_popcount} \cite{gcc}, que conta a
+quantidade de bits \texttt{1} em um inteiro; desse modo, o contador de erros é
+negado com uma máscara correspondente para que a contagem correta seja feita.
+
+\begin{figure}[htbp]
+  \lstinputlisting[language=cc, linerange={104-104}]{../sudoku_verifier.c}
+  \caption{Implementação da contagem de erros descrita acima.}
+\end{figure}
+
+\section{Distribuição das tarefas entre \emph{threads}}
+
+\emph{Funções aludidas}: \texttt{main}, \texttt{choose\_task},
+\texttt{print\_errors} \\
+
+Solucionar o problema proposto envolve tornar o programa verificador
+concorrente. Deste modo, é necessário identificar possibilidades de divisão de
+tarefas a fim de aumentar seu desempenho. Percebe-se que a única tarefa que
+pode ser dividida é a de verificação de regiões diferentes, visto que existem
+vinte e sete destas (nove linhas, nove colunas e nove quadrados internos). \\
+
+O número de \emph{threads} desejadas para a execução do programa é obtido como
+um argumento fornecido para o programa. É necessário apontar que o número
+máximo para tal, limitado em $2^{16} - 1$ neste programa, é fundamentado pela
+seguinte razão:
+
+\begin{verbatim}
+$ man pthread_create | grep "limit" -m4 -A2
+       EAGAIN A system-imposed limit on the number of threads was encountered.
+              There are a number of limits that may trigger this error: the
+              RLIMIT_NPROC soft resource limit (set via setr‐limit(2)), which
+              limits the number of processes and threads for a real user ID,
+              was reached; the kernel's system-wide limit on the number of
+              processes and threads, /proc/sys/kernel/threads-max, was reached
+              (see proc(5)); or the maximum number of PIDs,
+              /proc/sys/kernel/pid_max, was reached (see proc(5)).
+$ cat /proc/sys/kernel/threads-max
+61085
+\end{verbatim}
+
+O valor acima foi observado em outros computadores sem maiores variações. Com
+o número escolhido, um vetor é criado para armazenar as \emph{threads}. Ao
+inicializá-las, é necessário inserir seus índices como argumento para o método
+que realiza a distribuição das tarefas. \\
+
+A distribuição é implementada da seguinte maneira: um vetor de ponteiros de
+função (declarado com uma extensão da linguagem C que mostra advertências em
+compilações com configurações mais rigorosas) e um inteiro de 32 bits são
+criados a fim de representar as tarefas disponíveis. Ao iterar sobre este vetor
+e escolher uma tarefa, a \emph{thread} mudará o bit referente ao índice desta,
+assim marcando-a como completa, e executará o ponteiro de função com os
+argumentos necessários.  Este procedimento é sensível à condições de corrida,
+pois duas \emph{threads} podem escolher a mesma tarefa e mudar o bit duas
+vezes, de modo que uma terceira poderá escolhê-la novamente. Portanto,
+mecanismos de exclusão mútua abrangem as partes críticas da função.
+
+\begin{figure}[htbp]
+  \lstinputlisting[language=cc, linerange={114-123}]{../sudoku_verifier.c}
+  \caption{Escolha de tarefas a partir de uma `'fila`'. É possível observar
+    que é necessário liberar a \emph{thread} em dois momentos diferentes
+    pois, do contrário, ela nunca retornará ao fluxo de execução usual,
+    impedindo a continuidade do programa. O ponteiro de função disponível em
+    `tasks` é chamado com dois argumentos: a região escolhida, decidida pelo
+    índice da iteração, que é sempre divisível pelo tamanho do tabuleiro; e
+    o índice da \emph{thread}, convertido de um \texttt{void*} proveniente
+    da criação desta.}
+\end{figure}
+
+Outra abordagem possível é uma distribuição prévia das tarefas entre as
+\emph{threads}; assim, estas já saberiam de suas responsabilidades no momento
+que são criadas.  Essa abordagem alternativa pode prevenir um problema onde uma
+ou mais \emph{threads} estão sempre tentando obter tarefas mas falhando, assim
+presas na fila de espera e não oferecendo desempenho máximo. \\
+
+Após a contagem de erros, caso um exista um elemento repetido, é necessário
+somar estes ao número total. Como duas \emph{threads} podem modificar este
+contador em períodos muito próximos, verifica-se que esta região também é
+crítica; portanto, também é cercada por mecanismos que impedem a contagem
+errada de erros.
+
+\bibliography{ine5412_t1}
+\bibliographystyle{plain}
+
+\end{document}
