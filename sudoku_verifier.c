@@ -58,8 +58,8 @@ void load_grid(uint8_t m[][SIZE], char* file) {
   }
 
   printf("Quebra-cabecas fornecido:\n");
-  for (int i = 0; i < SIZE; ++i) {
-    for (int j = 0; j < SIZE; ++j) {
+  for (uint8_t i = 0; i < SIZE; ++i) {
+    for (uint8_t j = 0; j < SIZE; ++j) {
       fscanf(input, "%hhu ", &m[i][j]);
       printf("%hhu ", m[i][j]);
       m[i][j] -= 1;
