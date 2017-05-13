@@ -12,3 +12,5 @@ If `-pedantic` is enabled, the compiler will warn about the task buffer
 declaration, since it is a GNU extension [1].
 
 [1] https://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html
+
+Original assignment: c6eca5c6e8674b445f4980a61f9bf46ddb68625c
