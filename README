@@ -1,12 +1,12 @@
-The assignment consists of creating a program that can verify a given sudoku
-solution using POSIX threads, preferably as fast as possible.
+The assignment consists of creating a program that can verify a given 9x9
+sudoku solution using POSIX threads, preferably as fast as possible.
 
-Compile with `make -s`, or if you prefer Clang, `CC=clang make -s`. Usage:
+Compile with `make`, or if you prefer Clang, `CC=clang make`. Usage:
 
     ./sudoku_verifier <input file> <nthreads>
 
-Some test boards are available inside the `test/` folder; run `make test` to
-assert the (in)validity of their solutions.
+Some test boards are available inside the `tests/` folder; run `make -j test`
+to assert the (in)validity of their solutions.
 
 If `-pedantic` is enabled, the compiler will warn about the task buffer
 declaration, since it is a GNU extension [1].

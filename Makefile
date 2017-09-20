@@ -1,14 +1,14 @@
-CFLAGS = -Wall -Wextra -march=native -pipe -pthread -std=c11
+SRC = $(basename $(wildcard *.c))
+CFLAGS = -Wall -Wextra -march=native -pipe -pthread -std=c11 -O3
 
-all: build
-
-build: $(basename $(wildcard *.c))
+all: $(SRC)
 
 debug: CFLAGS += -g
-debug: build
+debug: all
 
-test: build
-	@find test/* -exec ./sudoku_verifier {} $(shell nproc) \; | less
+test: $(addsuffix .test, $(basename $(wildcard tests/*.in)))
+%.test: %.in %.out /usr/bin/cmp all
+	@./$(SRC) $< $(shell nproc) | tail -1 | cmp -s $(word 2, $?) -
 
 clean:
-	@rm $(basename $(wildcard *.c))
+	@rm $(SRC)

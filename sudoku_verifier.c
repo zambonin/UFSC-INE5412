@@ -1,3 +1,4 @@
+#include <math.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -89,10 +90,10 @@ void check_col(uint8_t col_index, uint16_t tid) {
 }
 
 void check_sqr(uint8_t sqr_index, uint16_t tid) {
-  uint8_t r = (sqr_index / 3) * 3, c = (sqr_index % 3) * 3;
+  uint8_t s = sqrt(SIZE), r = (sqr_index / s) * s, c = (sqr_index % s) * s;
   uint16_t repeated = 0;
-  for (uint8_t i = r; i < r + 3; ++i) {
-    for (uint8_t j = c; j < c + 3; ++j) {
+  for (uint8_t i = r; i < r + s; ++i) {
+    for (uint8_t j = c; j < c + s; ++j) {
       repeated |= 1 << grid[i][j];
     }
   }
