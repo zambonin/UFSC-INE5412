@@ -1,28 +1,16 @@
-\documentclass[12pt]{article}
+\documentclass[12pt]{sftex/sftex}
 
-\usepackage[brazil]{babel}
-\usepackage[T1]{fontenc}
-\usepackage[a4paper, margin=1.5cm]{geometry}
-\usepackage[colorlinks, urlcolor=blue, citecolor=red]{hyperref}
-\usepackage[utf8]{inputenc}
-\usepackage{listings}
+\title{Verificador de Sudoku \emph{Multithread}}
+\author{Gustavo F. Guimarães, Gustavo Zambonin, Marcello Klingelfus}
+\email{\{gustavo.g,gustavo.zambonin,marcello.klingelfus\}@grad.ufsc.br}
+\src{https://github.com/zambonin/ufsc-ine5412}
+\uniclass{Sistemas Operacionais I}
+\classcode{UFSC-INE5412}
 
 \lstdefinelanguage{cc}{
   language = C,
-  basicstyle=\ttfamily\footnotesize,
-  keywordstyle=\color{blue},
   morekeywords = {uint8_t, uint16_t, intptr_t, __builtin_popcount, SIZE},
 }
-
-\title{\textbf{Verificador de Sudoku \emph{Multithread}}}
-\author{
-  Gustavo F. Guimarães, Gustavo Zambonin, Marcello Klingelfus\thanks{
-    \texttt{\{gustavo.g,gustavo.zambonin,marcello.klingelfus\}@grad.ufsc.br}
-    \hfill \texttt{\href{https://github.com/zambonin/ufsc-ine5412}{src/}}
-  } \\
-  \small{Sistemas Operacionais I (UFSC -- INE5412)}
-}
-\date{}
 
 \setlength{\parindent}{0pt}
 
@@ -56,7 +44,8 @@ Note que é possível substituir o iterável \texttt{range} por qualquer lista d
 números.
 
 \begin{figure}[htbp]
-  \lstinputlisting[language=cc, linerange={91-98}]{../sudoku_verifier.c}
+  \lstinputlisting[
+      language=cc, firstline=93, lastline=99]{../sudoku_verifier.c}
   \caption{Checagem de repetições em uma região quadrada do tabuleiro. Cada
     uma destas pode ser obtida a partir de um índice $i \in \{0, 8\}$,
     organizadas da esquerda para a direita, de cima para baixo.}
@@ -65,12 +54,13 @@ números.
 Caso existam repetições, alguns bits não serão ativados, e deste modo, estes
 podem ser contados para descobrir a quantidade de números repetidos naquela
 linha. Isto é feito com uma extensão do compilador GCC (também suportada por
-Clang), chamada de \texttt{\_\_builtin\_popcount} \cite{gcc}, que conta a
+Clang), chamada de \texttt{\_\_builtin\_popcount}~\cite{gcc}, que conta a
 quantidade de bits \texttt{1} em um inteiro; desse modo, o contador de erros é
 negado com uma máscara correspondente para que a contagem correta seja feita.
 
 \begin{figure}[htbp]
-  \lstinputlisting[language=cc, linerange={104-104}]{../sudoku_verifier.c}
+  \lstinputlisting[
+      language=cc, firstline=105, lastline=105]{../sudoku_verifier.c}
   \caption{Implementação da contagem de erros descrita acima.}
 \end{figure}
 
@@ -121,14 +111,15 @@ vezes, de modo que uma terceira poderá escolhê-la novamente. Portanto,
 mecanismos de exclusão mútua abrangem as partes críticas da função.
 
 \begin{figure}[htbp]
-  \lstinputlisting[language=cc, linerange={114-123}]{../sudoku_verifier.c}
-  \caption{Escolha de tarefas a partir de uma `'fila`'. É possível observar
+  \lstinputlisting[
+      language=cc, firstline=115, lastline=124]{../sudoku_verifier.c}
+  \caption{Escolha de tarefas a partir de uma ``fila''. É possível observar
     que é necessário liberar a \emph{thread} em dois momentos diferentes
     pois, do contrário, ela nunca retornará ao fluxo de execução usual,
     impedindo a continuidade do programa. O ponteiro de função disponível em
-    `tasks` é chamado com dois argumentos: a região escolhida, decidida pelo
-    índice da iteração, que é sempre divisível pelo tamanho do tabuleiro; e
-    o índice da \emph{thread}, convertido de um \texttt{void*} proveniente
+    \texttt{tasks} é chamado com dois argumentos: a região escolhida, decidida
+    pelo índice da iteração, que é sempre divisível pelo tamanho do tabuleiro;
+    e o índice da \emph{thread}, convertido de um \texttt{void*} proveniente
     da criação desta.}
 \end{figure}
 
